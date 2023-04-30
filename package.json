@@ -1,0 +1,26 @@
+{
+  "name": "nuxt-app",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "devDependencies": {
+    "@types/node": "^18",
+    "@vant/nuxt": "^1.0.1",
+    "@vueuse/core": "^10.1.0",
+    "@vueuse/nuxt": "^10.1.0",
+    "nuxt": "^3.4.2",
+    "prettier": "^2.8.8",
+    "prettier-plugin-tailwindcss": "^0.2.7",
+    "vant": "^4.2.0"
+  },
+  "dependencies": {
+    "@nuxtjs/tailwindcss": "^6.6.6",
+    "@vant/touch-emulator": "^1.4.0",
+    "defu": "^6.1.2"
+  }
+}
