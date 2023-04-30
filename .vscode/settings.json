@@ -1,0 +1,4 @@
+{
+  "vue.features.complete.tagNameCasing": "kebab",
+  "vue.features.complete.propNameCasing": "kebab"
+}
