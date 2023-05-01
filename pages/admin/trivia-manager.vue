@@ -10,7 +10,7 @@
         >{{ showTriviaForm ? "Cancelar" : "Criar Trivia" }}</van-button
       >
       <van-button
-        v-if="!triviaCreationCriteria.allCriteriaMet"
+        v-if="showTriviaForm && !triviaCreationCriteria.allCriteriaMet"
         size="small"
         type="danger"
         icon="info"
@@ -55,13 +55,21 @@
 
             <van-space class="mt-2 px-4" :size="20" fill>
               <van-button
-                type="primary"
+                type="success"
                 size="small"
                 icon="plus"
+                :loading="pendingCategories"
+                @click="toggleCategoryForm(true)"
+                >Criar Nova categoria</van-button
+              >
+              <van-button
+                type="primary"
+                size="small"
+                icon="search"
                 :disabled="pendingCategories"
                 :loading="pendingCategories"
                 @click="toggleCategoryPicker(true)"
-                >Adicionar categoria</van-button
+                >Selecionar categoria</van-button
               >
               <van-space :size="8" wrap>
                 <van-tag
@@ -184,12 +192,7 @@
         </van-tab>
       </van-tabs>
     </van-form>
-    <van-popup
-      v-model:show="showCategoryPicker"
-      position="center"
-      class=""
-      round
-    >
+    <van-popup v-model:show="showCategoryPicker" position="center" round>
       <van-picker
         title="Categoria"
         class="min-w-[40vw]"
@@ -198,6 +201,53 @@
         @confirm="addCategory"
       />
     </van-popup>
+    <van-popup v-model:show="showCategoryForm" position="center" round>
+      <van-form @submit="createCategory">
+        <van-field
+          v-model="newCategoryName"
+          label="Nome"
+          label-class="font-bold"
+          placeholder="nome da categoria"
+          :rules="[
+            {
+              required: true,
+              message: 'Informe o nome.',
+            },
+            {
+              validator: rules.uniqueCategory,
+              message: 'Categoria já existe',
+              trigger: 'onBlur',
+            },
+            {
+              validator: (value: string) => value.length >= 3,
+              message: 'Deve ter no mínimo 3 letras'
+
+            }
+          ]"
+          :maxlength="30"
+          show-word-limit
+        />
+        <van-button type="success" native-type="submit" block>
+          Criar
+        </van-button>
+      </van-form>
+    </van-popup>
+    <van-space v-if="!showTriviaForm" direction="vertical" fill>
+      <van-cell-group>
+        <van-cell
+          v-for="trivia in paginatedTrivias?.data"
+          :key="trivia.id"
+          :title="trivia.title"
+        />
+      </van-cell-group>
+      <client-only>
+        <van-pagination
+          v-model="currentPage"
+          :total-items="paginatedTrivias?.total ?? 0"
+          :items-per-page="currentPageSize"
+        />
+      </client-only>
+    </van-space>
   </van-space>
 </template>
 
@@ -212,7 +262,11 @@ import {
   IndexedValues,
   NewTriviaState,
 } from "~/utils/lib/States";
+import { ITrivia } from "~/utils/lib/Trivia";
 
+useSeoMeta({
+  title: "Gerenciador de Trivias",
+});
 const config = useRuntimeConfig();
 const authToken = useCookie("authToken");
 
@@ -231,6 +285,7 @@ const {
 const triviaForm = ref<FormInstance | null>(null);
 
 const [showTriviaForm, toggleTriviaForm] = useToggle(false);
+const [showCategoryForm, toggleCategoryForm] = useToggle(false);
 const [showCategoryPicker, toggleCategoryPicker] = useToggle(false);
 
 const newTrivia: NewTriviaState = reactive(emptyNewTriviaState);
@@ -247,6 +302,30 @@ const triviaRequestBody = computed(() => ({
   },
 }));
 const questionsAmount = computed(() => newTrivia.data.columns[0].values.length);
+const newCategoryName = ref("");
+
+const { currentPage, currentPageSize } = useOffsetPagination({
+  page: 1,
+  pageSize: 10,
+});
+
+const { data: paginatedTrivias } = useCustomFetch<{
+  data: ITrivia[];
+  page: number;
+  pages: number;
+  total: number;
+}>("/trivia/all", {
+  query: {
+    limit: currentPageSize,
+    page: currentPage,
+  },
+  watch: [currentPage],
+  immediate: true,
+  onResponseError(context) {
+    console.error(context.error);
+    showFailToast("Não foi possível carregar as trivias.");
+  },
+});
 
 const indexedValues: Ref<IndexedValues> = ref({});
 
@@ -327,11 +406,29 @@ watch(showTriviaForm, async (value) => {
   if (value && !categories.value?.length) {
     const toast = showLoadingToast({
       message: "Carregando categorias",
+      wordBreak: "break-word",
+      duration: 0,
     });
     await fetchCategories();
     toast.close();
   }
 });
+
+const rules = {
+  uniqueCategory(): Promise<boolean> {
+    return new Promise((resolve) => {
+      resolve(
+        !categories.value?.some(
+          (c) => Collator.compare(c.name, newCategoryName.value) === 0
+        )
+      );
+    });
+  },
+};
+
+// async function handlePaginationChange(params: any) {
+//   await refreshTrivias();
+// }
 
 function resetTriviaState() {
   newTrivia.data = emptyNewTriviaState.data;
@@ -364,6 +461,36 @@ async function createTrivia() {
   } catch (error) {
     console.error(error);
     showNotify("Falha ao criar a Trivia");
+  }
+}
+
+async function createCategory() {
+  try {
+    showLoadingToast("Criando categoria");
+    const response = await $fetch<{ id: string }>("/category", {
+      baseURL: config.public.api,
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken.value}` },
+      body: {
+        name: newCategoryName.value,
+      },
+    });
+
+    categories.value?.push({ id: response.id, name: newCategoryName.value });
+    newCategoryName.value = "";
+
+    closeToast();
+    toggleCategoryForm(false);
+    showNotify({
+      type: "success",
+      message: "Categoria criada ❤️",
+    });
+  } catch (error) {
+    showNotify({
+      type: "danger",
+      message: "Erro ao criar categoria",
+    });
+    console.error(error);
   }
 }
 
