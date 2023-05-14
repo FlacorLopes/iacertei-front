@@ -1,4 +1,6 @@
 {
   "vue.features.complete.tagNameCasing": "kebab",
-  "vue.features.complete.propNameCasing": "kebab"
+  "vue.features.complete.propNameCasing": "kebab",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "vue.complete.casing.tags": "kebab"
 }
