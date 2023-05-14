@@ -128,6 +128,7 @@
               :key="column.label + index"
               v-model="newTrivia.rows[index].value"
               label-class="font-bold"
+              :id="`field-${index}`"
               :name="column.label"
               :autocomplete="column.label"
               :placeholder="column.label"
@@ -163,31 +164,10 @@
               >
             </div>
             <span> 🤠 {{ questionsAmount }} questões. </span>
-            <div class="h-[40vh] max-h-[40vh] overflow-y-scroll">
-              <van-index-bar :index-list="computedIndexes" :sticky="false">
-                <template v-for="group in tableRepresentation">
-                  <van-index-anchor :index="group.letter">{{
-                    group.letter
-                  }}</van-index-anchor>
-                  <van-cell v-for="(rows, index) in group.rows" :key="index">
-                    <template #title>
-                      <van-space class="items-baseline gap-4" wrap fill>
-                        <template v-for="row in rows">
-                          <van-space direction="vertical" :size="-2">
-                            <div class="w-[20vw] sm:w-[10vw]">
-                              <strong>{{ row.title }}</strong>
-                            </div>
-                            <div class="w-[20vw] sm:w-[10vw]">
-                              <i>{{ row.subTitle }}</i>
-                            </div>
-                          </van-space>
-                        </template>
-                      </van-space>
-                    </template>
-                  </van-cell>
-                </template>
-              </van-index-bar>
-            </div>
+            <indexed-trivias
+              :indexed-values="indexedValues"
+              :columns="newTrivia.data.columns"
+            />
           </van-space>
         </van-tab>
       </van-tabs>
@@ -232,22 +212,7 @@
         </van-button>
       </van-form>
     </van-popup>
-    <van-space v-if="!showTriviaForm" direction="vertical" fill>
-      <van-cell-group>
-        <van-cell
-          v-for="trivia in paginatedTrivias?.data"
-          :key="trivia.id"
-          :title="trivia.title"
-        />
-      </van-cell-group>
-      <client-only>
-        <van-pagination
-          v-model="currentPage"
-          :total-items="paginatedTrivias?.total ?? 0"
-          :items-per-page="currentPageSize"
-        />
-      </client-only>
-    </van-space>
+    <paginated-trivia v-if="!showTriviaForm" />
   </van-space>
 </template>
 
@@ -262,13 +227,13 @@ import {
   IndexedValues,
   NewTriviaState,
 } from "~/utils/lib/States";
-import { ITrivia } from "~/utils/lib/Trivia";
+import { useUserStore } from "~/stores/userStore";
 
 useSeoMeta({
   title: "Gerenciador de Trivias",
 });
 const config = useRuntimeConfig();
-const authToken = useCookie("authToken");
+const userStore = useUserStore();
 
 const {
   execute: fetchCategories,
@@ -304,59 +269,10 @@ const triviaRequestBody = computed(() => ({
 const questionsAmount = computed(() => newTrivia.data.columns[0].values.length);
 const newCategoryName = ref("");
 
-const { currentPage, currentPageSize } = useOffsetPagination({
-  page: 1,
-  pageSize: 10,
-});
-
-const { data: paginatedTrivias } = useCustomFetch<{
-  data: ITrivia[];
-  page: number;
-  pages: number;
-  total: number;
-}>("/trivia/all", {
-  query: {
-    limit: currentPageSize,
-    page: currentPage,
-  },
-  watch: [currentPage],
-  immediate: true,
-  onResponseError(context) {
-    console.error(context.error);
-    showFailToast("Não foi possível carregar as trivias.");
-  },
-});
-
 const indexedValues: Ref<IndexedValues> = ref({});
 
 const firstMaskedColumnIndex = computed(() =>
   newTrivia.data.columns.findIndex((col) => col.isValueMasked)
-);
-const computedIndexes = computed(
-  () =>
-    Object.keys(indexedValues.value).sort(
-      Collator.compare
-    ) as UppercaseLatinAlphabet[]
-);
-
-const tableRepresentation = computed(() =>
-  computedIndexes.value
-    .map((letter) => {
-      const rows = indexedValues.value[letter]?.map((indexed) =>
-        newTrivia.data.columns.map((column) => {
-          return {
-            title: column.values[indexed.valueIndex].value,
-            subTitle: column.label,
-          };
-        })
-      );
-
-      return {
-        letter,
-        rows,
-      };
-    })
-    .sort((a, b) => Collator.compare(a.letter, b.letter))
 );
 
 const categoryComlumns = computed(() =>
@@ -447,7 +363,7 @@ async function createTrivia() {
     await $fetch("/trivia", {
       baseURL: config.public.api,
       method: "POST",
-      headers: { Authorization: `Bearer ${authToken.value}` },
+      headers: { Authorization: `Bearer ${userStore.loggedUser.accessToken}` },
       body: triviaRequestBody.value,
     });
     closeToast();
@@ -470,7 +386,7 @@ async function createCategory() {
     const response = await $fetch<{ id: string }>("/category", {
       baseURL: config.public.api,
       method: "POST",
-      headers: { Authorization: `Bearer ${authToken.value}` },
+      headers: { Authorization: `Bearer ${userStore.loggedUser.accessToken}` },
       body: {
         name: newCategoryName.value,
       },
@@ -523,6 +439,9 @@ function addDataToColumns() {
 
     row.value = "";
   });
+
+  const field = document.getElementById("field-0");
+  if (field) field.focus();
 }
 
 function addCategory({ selectedOptions }: PickerConfirmEventParams) {

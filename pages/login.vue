@@ -17,11 +17,10 @@
   </div>
 </template>
 <script setup lang="ts">
+import { useUserStore } from "~/stores/userStore";
+
 const config = useRuntimeConfig();
-const authToken = useCookie("authToken", {
-  sameSite: true,
-  maxAge: 60 * 60 * 24,
-});
+const userStore = useUserStore();
 
 const email = ref("");
 const password = ref("");
@@ -41,9 +40,9 @@ async function onSubmit() {
       },
     });
 
-    authToken.value = resp.accessToken;
+    userStore.loggedUser = resp;
 
-    navigateTo("trivia-manager");
+    navigateTo(`/user/${userStore.loggedUser.id}`);
   } catch (error) {
     showFailToast({
       message: "Ocorreu um erro ao logar.",

@@ -4,4 +4,8 @@ const Collator = new Intl.Collator("pt-br", {
   usage: "sort",
 });
 
-export { Collator };
+function areStringsEqual(a: string, b: string): boolean {
+  return Collator.compare(a, b) === 0;
+}
+
+export { Collator, areStringsEqual };
